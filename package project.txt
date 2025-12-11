@@ -1,0 +1,190 @@
+package project;
+import java.sql.*;
+import java.util.*;
+
+public class HostelManagement {
+
+    static final String URL = "jdbc:mysql://localhost:3306/hostel";
+    static final String USER = "root";
+    static final String PASS = " ";
+
+    public static void main(String[] args) throws Exception {
+        Scanner sc = new Scanner(System.in);
+
+        while (true) {
+            System.out.println("\n===== HOSTEL MANAGEMENT SYSTEM =====");
+            System.out.println("1. Add Student");
+            System.out.println("2. View Students");
+            System.out.println("3. Allocate Room");
+            System.out.println("4. Checkout Student");
+            System.out.println("5. View Available Rooms");
+            System.out.println("6. Exit");
+            System.out.print("Enter choice: ");
+
+            int ch = sc.nextInt();
+
+            switch (ch) {
+                case 1 -> addStudent();
+                case 2 -> viewStudents();
+                case 3 -> allocateRoom();
+                case 4 -> checkoutStudent();
+                case 5 -> viewAvailableRooms();
+                case 6 -> System.exit(0);
+                default -> System.out.println("Invalid Choice!");
+            }
+        }
+    }
+
+    static Connection getConnection() throws Exception {
+        return DriverManager.getConnection(URL, USER, PASS);
+    }
+
+    // -------------------- ADD STUDENT --------------------
+    static void addStudent() throws Exception {
+        Scanner sc = new Scanner(System.in);
+
+        System.out.print("Enter Student Name: ");
+        String name = sc.nextLine();
+
+        System.out.print("Enter Department: ");
+        String dept = sc.nextLine();
+
+        System.out.print("Enter Year: ");
+        int year = sc.nextInt();
+
+        Connection con = getConnection();
+        PreparedStatement ps = con.prepareStatement(
+            "INSERT INTO students(name, dept, year, room_no) VALUES (?, ?, ?, NULL)"
+        );
+
+        ps.setString(1, name);
+        ps.setString(2, dept);
+        ps.setInt(3, year);
+
+        ps.executeUpdate();
+        System.out.println("Student Added Successfully!");
+    }
+
+    // -------------------- VIEW STUDENTS --------------------
+    static void viewStudents() throws Exception {
+        Connection con = getConnection();
+        Statement st = con.createStatement();
+        ResultSet rs = st.executeQuery("SELECT * FROM students");
+
+        System.out.println("\n----- All Students -----");
+        while (rs.next()) {
+            System.out.println(
+                rs.getInt("id") + " | " +
+                rs.getString("name") + " | " +
+                rs.getString("dept") + " | " +
+                rs.getInt("year") + " | Room: " +
+                rs.getInt("room_no")
+            );
+        }
+    }
+
+    // -------------------- ALLOCATE ROOM --------------------
+    static void allocateRoom() throws Exception {
+        Scanner sc = new Scanner(System.in);
+
+        System.out.print("Enter Student ID: ");
+        int sid = sc.nextInt();
+
+        System.out.print("Enter Room Number: ");
+        int room = sc.nextInt();
+
+        Connection con = getConnection();
+
+        // check room capacity
+        PreparedStatement check = con.prepareStatement(
+            "SELECT capacity, occupied FROM rooms WHERE room_no=?"
+        );
+        check.setInt(1, room);
+        ResultSet rs = check.executeQuery();
+
+        if (rs.next()) {
+            int capacity = rs.getInt("capacity");
+            int occupied = rs.getInt("occupied");
+
+            if (occupied < capacity) {
+                // assign room
+                PreparedStatement ps1 = con.prepareStatement(
+                    "UPDATE students SET room_no=? WHERE id=?"
+                );
+                ps1.setInt(1, room);
+                ps1.setInt(2, sid);
+                ps1.executeUpdate();
+
+                // update occupied count
+                PreparedStatement ps2 = con.prepareStatement(
+                    "UPDATE rooms SET occupied = occupied + 1 WHERE room_no=?"
+                );
+                ps2.setInt(1, room);
+                ps2.executeUpdate();
+
+                System.out.println("Room Allocated Successfully!");
+            } else {
+                System.out.println("Room is FULL!");
+            }
+        } else {
+            System.out.println("Room Not Found!");
+        }
+    }
+
+    // -------------------- CHECKOUT STUDENT --------------------
+    static void checkoutStudent() throws Exception {
+        Scanner sc = new Scanner(System.in);
+
+        System.out.print("Enter Student ID to checkout: ");
+        int sid = sc.nextInt();
+
+        Connection con = getConnection();
+
+        // get student's room number
+        PreparedStatement ps1 = con.prepareStatement(
+            "SELECT room_no FROM students WHERE id=?"
+        );
+        ps1.setInt(1, sid);
+        ResultSet rs = ps1.executeQuery();
+
+        if (rs.next()) {
+            int room = rs.getInt("room_no");
+
+            // remove room from student
+            PreparedStatement ps2 = con.prepareStatement(
+                "UPDATE students SET room_no=NULL WHERE id=?"
+            );
+            ps2.setInt(1, sid);
+            ps2.executeUpdate();
+
+            // decrement room occupancy
+            PreparedStatement ps3 = con.prepareStatement(
+                "UPDATE rooms SET occupied = occupied - 1 WHERE room_no=?"
+            );
+            ps3.setInt(1, room);
+            ps3.executeUpdate();
+
+            System.out.println("Student Checked Out Successfully!");
+        } else {
+            System.out.println("Invalid Student ID!");
+        }
+    }
+
+    // -------------------- VIEW AVAILABLE ROOMS --------------------
+    static void viewAvailableRooms() throws Exception {
+        Connection con = getConnection();
+        Statement st = con.createStatement();
+        ResultSet rs = st.executeQuery(
+            "SELECT * FROM rooms WHERE occupied < capacity"
+        );
+
+        System.out.println("\n----- Available Rooms -----");
+        while (rs.next()) {
+            System.out.println(
+                "Room " + rs.getInt("room_no") +
+                " | Capacity: " + rs.getInt("capacity") +
+                " | Occupied: " + rs.getInt("occupied")
+            );
+        }
+    }
+}
